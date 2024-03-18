@@ -1,5 +1,1 @@
-
-Sample image template:
-<img src="https://github.com/dataset-ninja/gland-segmentation/assets/78355358/f158d0dd-71d5-41a2-aba5-4a5f57d54c35" alt="image" width="800">
-
-<span style="font-size: smaller; font-style: italic;">Image description.</span>
+The **Zalo Traffic Sign Detection 2020 Dataset** presents a significant challenge yet is highly suitable for traffic sign detection applications in the diverse traffic conditions of Vietnam. Comprising 4,500 images sized at 1622x626 pixels, the dataset was curated by crawling Google Street View Map across various locations in Vietnam. The task entails detecting seven prevalent types of traffic signs: *no entry*, *no parking/waiting*, *no turning*, *max speed*, *other prohibition signs*, *warning*, and *mandatory*. Notably, the dataset poses considerable challenges due to the majority of objects of interest being extremely small, often less than 10x10 pixels in size. Additionally, it encompasses a wide array of scenes, ranging from urban areas to rural landscapes and from bustling city streets to secluded highways. The dataset is partitioned into two subsets: the training set, comprising 4,000 images, and the test set, comprising 500 images. Although the size of images of the Zalo dataset is large, traffic signs are very small in comparison to the whole image because the signs are very far from the camera.

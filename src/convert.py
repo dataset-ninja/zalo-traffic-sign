@@ -1,17 +1,19 @@
 import os
 import shutil
+from collections import defaultdict
 
 import supervisely as sly
+from dataset_tools.convert import unpack_if_archive
 from supervisely.io.fs import (
     file_exists,
     get_file_name,
     get_file_name_with_ext,
     get_file_size,
 )
+from supervisely.io.json import load_json_file
 from tqdm import tqdm
 
 import src.settings as s
-from dataset_tools.convert import unpack_if_archive
 
 
 def convert_and_upload_supervisely_project(
@@ -19,72 +21,104 @@ def convert_and_upload_supervisely_project(
 ) -> sly.ProjectInfo:
     # Possible structure for bbox case. Feel free to modify as you needs.
 
-    root_path = ""
-    images_folder = "images"
-    bboxes_folder = "labels"
+    train_path = "/home/alex/DATASETS/TODO/za_traffic_2020/traffic_train/images"
+    test_path = "/home/alex/DATASETS/TODO/za_traffic_2020/traffic_public_test/images"
+    ann_json_path = (
+        "/home/alex/DATASETS/TODO/za_traffic_2020/traffic_train/train_traffic_sign_dataset.json"
+    )
+    csv_path = "/home/alex/DATASETS/TODO/za_traffic_2020/traffic_train/annotation.csv"
+
     batch_size = 30
-    img_ext = ".png"
-    ann_ext = ".txt"
+
+    ds_name_to_data = {"train": train_path, "test": test_path}
 
     def create_ann(image_path):
-        labels, img_tags, label_tags = [], [], []
+        labels = []
 
-        image_np = sly.imaging.image.read(image_path)[:, :, 0]
-        img_height = image_np.shape[0]
-        img_width = image_np.shape[1]
+        image_name = get_file_name_with_ext(image_path)
+        img_height = image_name_to_shape[image_name][0]
+        img_wight = image_name_to_shape[image_name][1]
 
-        file_name = get_file_name(image_path)
-        curr_anns_dirpath = ""
-        ann_path = os.path.join(curr_anns_dirpath, file_name + ann_ext)
+        street_value = image_name_to_shape[image_name][2]
+        street = sly.Tag(street_meta, value=street_value)
 
-        if file_exists(ann_path):
-            with open(ann_path) as f:
-                content = f.read().split("\n")
-                for curr_data in content:
-                    if len(curr_data) != 0:
-                        curr_data = list(map(float, curr_data.split(" ")))
+        ann_data = image_name_to_ann_data[get_file_name_with_ext(image_path)]
+        for curr_ann_data in ann_data:
+            category_id = int(curr_ann_data[0])
+            obj_class = idx_to_class[category_id]
+            bbox_coord = curr_ann_data[1]
+            rectangle = sly.Rectangle(
+                top=int(bbox_coord[1]),
+                left=int(bbox_coord[0]),
+                bottom=int(bbox_coord[1] + bbox_coord[3]),
+                right=int(bbox_coord[0] + bbox_coord[2]),
+            )
+            label_rectangle = sly.Label(rectangle, obj_class)
+            labels.append(label_rectangle)
 
-                        left = int((curr_data[1] - curr_data[3] / 2) * img_width)
-                        right = int((curr_data[1] + curr_data[3] / 2) * img_width)
-                        top = int((curr_data[2] - curr_data[4] / 2) * img_height)
-                        bottom = int((curr_data[2] + curr_data[4] / 2) * img_height)
+        return sly.Annotation(img_size=(img_height, img_wight), labels=labels, img_tags=[street])
 
-                        rectangle = sly.Rectangle(top=top, left=left, bottom=bottom, right=right)
+    idx_to_class = {
+        1: sly.ObjClass("no entry", sly.Rectangle),
+        2: sly.ObjClass("no parking/waiting", sly.Rectangle),
+        3: sly.ObjClass("no turning", sly.Rectangle),
+        4: sly.ObjClass("max speed", sly.Rectangle),
+        5: sly.ObjClass("other prohibition signs", sly.Rectangle),
+        6: sly.ObjClass("warning", sly.Rectangle),
+        7: sly.ObjClass("mandatory", sly.Rectangle),
+    }
 
-                        for obj_class in obj_classes:
-                            if obj_class.name == idx2clsname[curr_data[0]]:
-                                curr_obj_class = obj_class
-                                break
-                        label = sly.Label(rectangle, curr_obj_class, label_tags)
-                        labels.append(label)
+    street_meta = sly.TagMeta("street id", sly.TagValueType.ANY_NUMBER)
 
-        return sly.Annotation(img_size=(img_height, img_width), labels=labels, img_tags=img_tags)
+    ann = load_json_file(ann_json_path)
 
-    class_names = ["class1", "class2", ...]
-    idx2clsname = {}
-    obj_classes = [sly.ObjClass(name, sly.Rectangle) for name in class_names]
+    image_id_to_name = {}
+    image_name_to_ann_data = defaultdict(list)
+    image_name_to_shape = {}
+
+    for curr_image_info in ann["images"]:
+        image_id_to_name[curr_image_info["id"]] = curr_image_info["file_name"]
+        image_name_to_shape[curr_image_info["file_name"]] = (
+            curr_image_info["height"],
+            curr_image_info["width"],
+            curr_image_info["street_id"],
+        )
+
+    for curr_ann_data in ann["annotations"]:
+        image_id = curr_ann_data["image_id"]
+        image_name_to_ann_data[image_id_to_name[image_id]].append(
+            [curr_ann_data["category_id"], curr_ann_data["bbox"]]
+        )
 
     project = api.project.create(workspace_id, project_name, change_name_if_conflict=True)
-    meta = sly.ProjectMeta(obj_classes=obj_classes)
+    meta = sly.ProjectMeta(
+        obj_classes=list(idx_to_class.values()),
+        tag_metas=[street_meta],
+    )
     api.project.update_meta(project.id, meta.to_json())
 
-    for ds_name in os.listdir(root_path):
-        dataset = api.dataset.create(project.id, ds_name, change_name_if_conflict=True)
-        dataset_path = os.path.join(root_path, ds_name)
+    for ds_name, images_path in ds_name_to_data.items():
 
-        images_pathes = sly.fs.list_files_recursively(dataset_path, valid_extensions=[img_ext])
+        dataset = api.dataset.create(
+            project.id, get_file_name(ds_name), change_name_if_conflict=True
+        )
 
-        pbar = tqdm(desc=f"Create dataset '{ds_name}'", total=len(images_pathes))
-        for images_pathes_batch in sly.batched(images_pathes, batch_size=batch_size):
-            images_names_batch = [
-                get_file_name_with_ext(image_path) for image_path in images_pathes_batch
-            ]
+        images_names = os.listdir(images_path)
 
-            img_infos = api.image.upload_paths(dataset.id, images_names_batch, images_pathes_batch)
-            img_ids = [image.id for image in img_infos]
+        progress = sly.Progress("Create dataset {}".format(ds_name), len(images_names))
 
-            anns = [create_ann(image_path) for image_path in images_pathes_batch]
-            api.annotation.upload_anns(img_ids, anns)
+        for images_names_batch in sly.batched(images_names, batch_size=batch_size):
+            img_pathes_batch = []
+            for image_name in images_names_batch:
+                img_pathes_batch.append(os.path.join(images_path, image_name))
 
-            pbar.update(len(images_names_batch))
+            img_infos = api.image.upload_paths(dataset.id, images_names_batch, img_pathes_batch)
+            img_ids = [im_info.id for im_info in img_infos]
+
+            if ds_name != "test":
+                anns = [create_ann(image_path) for image_path in img_pathes_batch]
+                api.annotation.upload_anns(img_ids, anns)
+
+            progress.iters_done_report(len(images_names_batch))
+
     return project

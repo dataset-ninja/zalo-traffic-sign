@@ -15,7 +15,7 @@ from dataset_tools.templates import (
 ##################################
 PROJECT_NAME: str = "Zalo Traffic Sign"
 PROJECT_NAME_FULL: str = "Zalo Traffic Sign Detection 2020 Dataset"
-HIDE_DATASET = True  # set False when 100% sure about repo quality
+HIDE_DATASET = False  # set False when 100% sure about repo quality
 
 ##################################
 # * After uploading to instance ##
@@ -67,14 +67,12 @@ PAPER: Optional[Union[str, List[str], Dict[str, str]]] = (
 BLOGPOST: Optional[Union[str, List[str], Dict[str, str]]] = None
 REPOSITORY: Optional[Union[str, List[str], Dict[str, str]]] = None
 
-CITATION_URL: Optional[str] = None
+CITATION_URL: Optional[str] = "Thanh-Tung Ngo"
 AUTHORS: Optional[List[str]] = None
 AUTHORS_CONTACTS: Optional[List[str]] = None
 
-ORGANIZATION_NAME: Optional[Union[str, List[str]]] = None
-ORGANIZATION_URL: Optional[Union[str, List[str]]] = (
-    "https://challenge.zalo.ai/portal/traffic-sign-detection"
-)
+ORGANIZATION_NAME: Optional[Union[str, List[str]]] = "Zalo AI, Vietnam"
+ORGANIZATION_URL: Optional[Union[str, List[str]]] = "https://zalo.ai/"
 
 # Set '__PRETEXT__' or '__POSTTEXT__' as a key with string value to add custom text. e.g. SLYTAGSPLIT = {'__POSTTEXT__':'some text}
 SLYTAGSPLIT: Optional[Dict[str, Union[List[str], str]]] = {
